@@ -1,0 +1,15 @@
+# Actual role hierarchy and grants to users
+
+PLATFORM_ADMIN:
+  comment: "Platform ops"
+  users: ["ALICE"]
+
+DATA_ENGINEER:
+  comment: "Pipelines + ELT"
+  users: ["BOB", "CAROL"]
+  inherit_from_roles: ["PLATFORM_ADMIN"]
+
+ANALYST:
+  comment: "BI read role"
+  users: ["DANA"]
+  grant_to_roles: ["ANALYTICS_LEAD"]
