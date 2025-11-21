@@ -1,0 +1,74 @@
+WITH CTE_OBJ_GRANTS AS
+(
+  SELECT
+    GRANTED_ON,
+    TABLE_CATALOG,
+    TABLE_SCHEMA,
+    NAME,
+    PRIVILEGE,
+    GRANTED_TO,
+    CASE  WHEN GRANTED_TO <> 'ROLE' THEN CONCAT_WS('.', TABLE_CATALOG, GRANTEE_NAME) -- database roles
+          ELSE GRANTEE_NAME
+    END AS GRANTEE_NAME,
+    GRANTED_BY,
+    GRANT_OPTION
+  FROM
+    SNOWFLAKE.ACCOUNT_USAGE.GRANTS_TO_ROLES
+  WHERE
+    DELETED_ON IS NULL                  -- focus on active roles
+    AND GRANTED_ON NOT LIKE '%ROLE%'    -- exclude role to role grants, see hierarchy query
+    AND GRANTED_ON <> 'USER'            -- exclude user ownership grants
+    AND GRANTED_BY <> 'SNOWFLAKE'       -- exclude built-in grants
+),
+CTE_COMBINE AS
+(  SELECT 
+    GRANTED_ON,
+    TABLE_CATALOG,
+    TABLE_SCHEMA,
+    NAME as obj_name_or_count
+    PRIVILEGE,
+    GRANTED_TO,
+    GRANTEE_NAME,
+    GRANTED_BY,
+    GRANT_OPTION
+    FROM CTE_OBJ_GRANTS
+  WHERE g.GRANTED_ON NOT IN (
+      'TABLE', 'VIEW', 'EXTERNAL TABLE',
+      'PROCEDURE', 'FUNCTION',
+      'SEQUENCE', 'STAGE', 'FILE FORMAT')
+  
+  UNION ALL
+  
+  SELECT 
+    GRANTED_ON,
+    TABLE_CATALOG,
+    TABLE_SCHEMA,
+    CASE WHEN COUNT(NAME) = 1 THEN CONCAT_WS(' ', COUNT(NAME), GRANTED_ON)
+         ELSE CONCAT(COUNT(NAME), ' ', GRANTED_ON, 'S') 
+    END as obj_name_or_count
+    PRIVILEGE,
+    GRANTED_TO,
+    GRANTEE_NAME,
+    GRANTED_BY,
+    GRANT_OPTION
+    FROM CTE_OBJ_GRANTS
+  WHERE g.GRANTED_ON IN (
+      'TABLE', 'VIEW', 'EXTERNAL TABLE',
+      'PROCEDURE', 'FUNCTION',
+      'SEQUENCE', 'STAGE', 'FILE FORMAT')
+  GROUP BY 
+    GRANTED_ON,
+    TABLE_CATALOG,
+    TABLE_SCHEMA,
+    PRIVILEGE,
+    GRANTED_TO,
+    GRANTEE_NAME,
+    GRANTED_BY,
+    GRANT_OPTION
+)
+SELECT *
+FROM CTE_COMBINE
+-- WHERE PRIVILEGE = 'OWNERSHIP' -- owner access
+-- WHERE PRIVILEGE LIKE 'CREATE%' OR PRIVILEGE = 'FAILOVER' -- full elevated access
+-- WHERE PRIVILEGE NOT IN ('SELECT', 'USAGE', 'READ', 'OWNERSHIP', 'FAILOVER') AND PRIVILEGE NOT LIKE 'CREATE%' -- basic elevated access
+WHERE PRIVILEGE IN ('SELECT', 'USAGE', 'READ') -- read only access
