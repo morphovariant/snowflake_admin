@@ -2,11 +2,11 @@
 WITH RECURSIVE role_edges AS (
   -- Each edge means: CHILD_ROLE (grantee_name) inherits from PARENT_ROLE (name)
   SELECT DISTINCT
-      CASE  WHEN GRANTED_ON IN ('DATABASE_ROLE','APPLICATION_ROLE') 
+      CASE  WHEN GRANTED_TO IN ('DATABASE_ROLE','APPLICATION_ROLE') 
             THEN CONCAT_WS('.', TABLE_CATALOG, GRANTEE_NAME)
             ELSE GRANTEE_NAME
       END AS parent_role,
-      CASE  WHEN GRANTED_TO IN ('DATABASE_ROLE','APPLICATION_ROLE')
+      CASE  WHEN GRANTED_ON IN ('DATABASE_ROLE','APPLICATION_ROLE')
             THEN CONCAT_WS('.', TABLE_CATALOG, NAME)
             ELSE NAME
       END AS child_role
@@ -43,11 +43,19 @@ with_self AS (
   -- Optional: include each role inheriting from itself (depth = 0),
   -- useful when you want a complete “who has what” join later.
   SELECT
-      r.ROLE_NAME AS role,
-      r.ROLE_NAME AS inherited_from,
+      CASE  WHEN r.ROLE_TYPE IN ('DATABASE_ROLE','APPLICATION_ROLE')
+            THEN CONCAT_WS('.', r.ROLE_DATABASE_NAME, r.NAME)
+            ELSE r.NAME
+      END AS role,
+      CASE  WHEN r.ROLE_TYPE IN ('DATABASE_ROLE','APPLICATION_ROLE')
+            THEN CONCAT_WS('.', r.ROLE_DATABASE_NAME, r.NAME)
+            ELSE r.NAME
+      END  AS inherited_from,
       0           AS depth,
-      ARRAY_CONSTRUCT(r.ROLE_NAME) AS path
+      ARRAY_CONSTRUCT(role) AS path
   FROM SNOWFLAKE.ACCOUNT_USAGE.ROLES r
+  WHERE r.OWNER <> 'SNOWFLAKE'
+  AND r.DELETED_ON IS NULL
 
   UNION ALL
 
@@ -61,4 +69,4 @@ SELECT
     ARRAY_TO_STRING(path, ' -> ') AS path,
     (depth = 1) AS is_direct
 FROM with_self
-ORDER BY role, depth, inherited_from;
+;
