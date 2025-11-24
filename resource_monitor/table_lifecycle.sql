@@ -9,7 +9,7 @@
 --   state_count  : cumulative count of tables in that state as of that date
 
 -- Adjust this if your effective fail-safe retention is different.
-SET failsafe_retention_days := 7;
+SET failsafe_retention_days = 7;
 
 WITH base AS (
     SELECT
@@ -29,7 +29,6 @@ WITH base AS (
         )                          AS dropped_date,
         DATE(table_entered_failsafe)     AS failsafe_date
     FROM snowflake.account_usage.table_storage_metrics
-    WHERE table_type IN ('PERMANENT', 'TRANSIENT', 'TEMPORARY')
 ),
 
 -- Optional: compute an approximate purge date (leaving FAILSAFE)
@@ -53,7 +52,6 @@ events AS (
     SELECT
         created_date       AS event_date,
         table_type,
-        is_clone,
         'CREATED'          AS state_name,
         1                  AS delta
     FROM with_purge
@@ -67,7 +65,6 @@ events AS (
     SELECT
         dropped_date       AS event_date,
         table_type,
-        is_clone,
         'CREATED'          AS state_name,
         -1                 AS delta
     FROM with_purge
@@ -78,7 +75,6 @@ events AS (
     SELECT
         dropped_date       AS event_date,
         table_type,
-        is_clone,
         'DROPPED'          AS state_name,
         1                  AS delta
     FROM with_purge
@@ -92,7 +88,6 @@ events AS (
     SELECT
         failsafe_date      AS event_date,
         table_type,
-        is_clone,
         'DROPPED'          AS state_name,
         -1                 AS delta
     FROM with_purge
@@ -103,7 +98,6 @@ events AS (
     SELECT
         failsafe_date      AS event_date,
         table_type,
-        is_clone,
         'FAILSAFE'         AS state_name,
         1                  AS delta
     FROM with_purge
@@ -119,7 +113,6 @@ events AS (
     SELECT
         purge_date         AS event_date,
         table_type,
-        is_clone,
         'FAILSAFE'         AS state_name,
         -1                 AS delta
     FROM with_purge
@@ -131,7 +124,6 @@ daily_deltas AS (
     SELECT
         event_date,
         table_type,
-        is_clone,
         state_name,
         SUM(delta) AS event_delta
     FROM events
@@ -144,7 +136,6 @@ state_counts AS (
     SELECT
         event_date,
         table_type,
-        is_clone,
         state_name,
         event_delta,
         SUM(event_delta) OVER (
@@ -158,7 +149,6 @@ state_counts AS (
 SELECT
     event_date,
     table_type,
-    is_clone,
     state_name,
     event_delta,
     state_count
